@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Users, FileText, ShoppingCart, DollarSign, TrendingUp, UserCheck, LayoutDashboard, Settings, Activity, Menu, LogOut, ArrowRight, Bell, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { supabase } from './lib/supabase';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -424,7 +423,7 @@ function App() {
                       <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={80} />
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: '#2a3441', opacity: 0.4 }} />
                       <Bar dataKey="value" name="Vendas" radius={[0, 4, 4, 0]} barSize={12}>
-                        {vendedoresData.map((entry, index) => {
+                        {vendedoresData.map((_, index) => {
                           const colors = ['#3b82f6', '#10b981', '#a855f7', '#d946ef', '#f43f5e', '#06b6d4', '#6366f1', '#14b8a6'];
                           return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
                         })}
