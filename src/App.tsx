@@ -1,8 +1,38 @@
 import { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
 import { Users, FileText, ShoppingCart, DollarSign, TrendingUp, UserCheck, LayoutDashboard, Settings, Activity, Menu, LogOut, ArrowRight, Bell, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { supabase } from './lib/supabase';
+
+const RADIAN = Math.PI / 180;
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  // Ocultar rótulo se a fatia for muito pequena (< 3%)
+  if (percent < 0.03) return null;
+
+  return (
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold" style={{ textShadow: '0px 1px 2px rgba(0,0,0,0.8)' }}>
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
+const renderOuterLabel = ({ cx, cy, midAngle, outerRadius, percent }: any) => {
+  const radius = outerRadius * 1.35;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  if (percent < 0.03) return null;
+
+  return (
+    <text x={x} y={y} fill="#e2e8f0" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight="bold">
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -28,6 +58,7 @@ function App() {
   // States for charts & metrics
   const [faturamentoData, setFaturamentoData] = useState<any[]>([]);
   const [empresaData, setEmpresaData] = useState<any[]>([]);
+  const [empresaPieData, setEmpresaPieData] = useState<any[]>([]);
   const [vendedoresData, setVendedoresData] = useState<any[]>([]);
   const [recebimentosData, setRecebimentosData] = useState<any[]>([]);
   const [ultimasMovimentacoes, setUltimasMovimentacoes] = useState<any[]>([]);
@@ -67,16 +98,26 @@ function App() {
         // ============================================
         if (viewEmpresa) {
           const empMap: Record<string, any> = {};
+          let totalIngresso = 0;
+          let totalBiro = 0;
+          let totalE3 = 0;
+
           viewEmpresa.forEach(row => {
             const d = format(parseISO(row.data), 'dd/MM');
             if (!empMap[d]) empMap[d] = { date: d, ingresso: 0, biro: 0, e3: 0 };
+            const v = Number(row.fatu_diario || 0);
 
             // Assuming IDs: 1 -> Ingresso Ideal, 2 -> Birô Ideal, 3 -> E3 Brindes
-            if (row.id_empresa === 1) empMap[d].ingresso += Number(row.fatu_diario || 0);
-            if (row.id_empresa === 2) empMap[d].biro += Number(row.fatu_diario || 0);
-            if (row.id_empresa === 3) empMap[d].e3 += Number(row.fatu_diario || 0); // Need exact ID, fallback logic
+            if (row.id_empresa === 1) { empMap[d].ingresso += v; totalIngresso += v; }
+            if (row.id_empresa === 2) { empMap[d].biro += v; totalBiro += v; }
+            if (row.id_empresa === 3) { empMap[d].e3 += v; totalE3 += v; }
           });
           setEmpresaData(Object.values(empMap));
+          setEmpresaPieData([
+            { name: 'Gráfica Expressa', value: totalIngresso, fill: '#3b82f6' },
+            { name: 'Birô Serv', value: totalBiro, fill: '#10b981' },
+            { name: 'E3/Outra', value: totalE3, fill: '#f59e0b' }
+          ].filter(x => x.value > 0));
         }
 
         // ============================================
@@ -180,6 +221,8 @@ function App() {
     }
 
     fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 5 * 60 * 1000); // 5 minutes refresh
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -341,10 +384,10 @@ function App() {
               </div>
             </div>
 
-            {/* Mid Row: Empresa Bar Chart & Propostas Line Chart */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Mid Row: Empresa Bar Chart, Empresa Pie Chart & Recebimentos Tipo */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
-                <h2 className="text-base font-bold text-white mb-0">Faturamento por Empresa</h2>
+                <h2 className="text-base font-bold text-white mb-0">Faturamento Diário por Empresa</h2>
                 <p className="text-[#64748b] text-xs mb-6">Consolidado por Identificador</p>
                 <div className="h-[260px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -357,6 +400,35 @@ function App() {
                       <Bar dataKey="biro" name="Birô Serv (2)" stackId="a" fill="#10b981" />
                       <Bar dataKey="e3" name="E3/Outra (3)" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                     </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
+                <h2 className="text-base font-bold text-white mb-0">Total Mensal por Empresa</h2>
+                <p className="text-[#64748b] text-xs mb-6">Faturamento Acumulado (Mês)</p>
+                <div className="h-[260px] w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={empresaPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={3}
+                        dataKey="value"
+                        stroke="none"
+                        labelLine={false}
+                        label={renderOuterLabel}
+                      >
+                        {empresaPieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', color: '#94a3b8', bottom: -10 }} />
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
@@ -376,6 +448,8 @@ function App() {
                         paddingAngle={3}
                         dataKey="value"
                         stroke="none"
+                        labelLine={false}
+                        label={renderOuterLabel}
                       >
                         {cobrancaData.map((_, index) => {
                           const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
@@ -399,12 +473,12 @@ function App() {
                   <BarChart data={topClientes} layout="vertical" margin={{ top: 0, right: 30, left: 100, bottom: 0 }}>
                     <XAxis type="number" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
                     <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={180} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#2a3441', opacity: 0.4 }} />
                     <Bar dataKey="value" name="Faturamento" radius={[0, 4, 4, 0]} barSize={16}>
                       {topClientes.map((_, index) => {
                         const colors = ['#3b82f6', '#10b981', '#a855f7', '#d946ef', '#f43f5e', '#06b6d4', '#6366f1', '#14b8a6', '#f59e0b', '#1e293b'];
                         return <Cell key={`cell-${index}`} fill={colors[0]} />;
                       })}
+                      <LabelList dataKey="value" position="right" fill="#94a3b8" fontSize={11} formatter={(val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(val))} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -451,6 +525,8 @@ function App() {
                         paddingAngle={5}
                         dataKey="value"
                         stroke="none"
+                        labelLine={false}
+                        label={renderCustomizedLabel}
                       >
                         {recebimentosData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.fill} />
