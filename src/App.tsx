@@ -3,6 +3,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, 
 import { Users, FileText, ShoppingCart, DollarSign, TrendingUp, UserCheck, LayoutDashboard, Settings, Activity, Menu, LogOut, ArrowRight, Bell, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { supabase } from './lib/supabase';
+import ClientesPage from './pages/Clientes';
 
 const RADIAN = Math.PI / 180;
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
@@ -53,6 +54,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 // Main App Component
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('Dashboard');
   const [loading, setLoading] = useState(true);
 
   // States for charts & metrics
@@ -64,7 +66,7 @@ function App() {
   const [ultimasMovimentacoes, setUltimasMovimentacoes] = useState<any[]>([]);
   const [topClientes, setTopClientes] = useState<any[]>([]);
   const [cobrancaData, setCobrancaData] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState({ faturamentoMes: 0, aReceber: 0, clientesAtivos: 0, totalPedidos: 0, orcamentos: 0 });
+  const [metrics, setMetrics] = useState({ faturamentoMes: 0, aReceber: 0, clientesAtivos: 0, totalPedidos: 0, faturamentoDiario: 0 });
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -85,12 +87,16 @@ function App() {
         // ============================================
         // 1. FATURAMENTO DIÁRIO (LINE CHART)
         // ============================================
+        let fDiario = 0;
         if (viewTotal) {
           const formattedTotal = viewTotal.map(row => ({
             date: format(parseISO(row.data), 'dd/MM'),
             valor: Number(row.fatu_diario || 0)
           }));
           setFaturamentoData(formattedTotal);
+          if (formattedTotal.length > 0) {
+            fDiario = formattedTotal[formattedTotal.length - 1].valor;
+          }
         }
 
         // ============================================
@@ -188,7 +194,7 @@ function App() {
             aReceber: aReceber,
             clientesAtivos: unqClients.size,
             totalPedidos: pagamentos.length,
-            orcamentos: 0 // Waiting for table definition
+            faturamentoDiario: fDiario
           });
 
           // Últimas Movimentações (Pegamos as 5 mais recentes de pagamentos_v2)
@@ -239,23 +245,29 @@ function App() {
 
         <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
           {[
-            { icon: LayoutDashboard, label: 'Dashboard', active: true },
-            { icon: Users, label: 'Clientes' },
-            { icon: ShoppingCart, label: 'Pedidos' },
-            { icon: FileText, label: 'Orçamentos' },
-            { icon: DollarSign, label: 'Financeiro' },
-            { icon: Settings, label: 'Configurações' },
-          ].map((item, index) => (
-            <button key={index} className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative ${item.active ? 'bg-blue-500/10 text-blue-400' : 'text-slate-400 hover:bg-[#2a3441] hover:text-white'}`}>
-              <item.icon size={20} className={item.active ? 'text-blue-400' : 'text-slate-400 group-hover:text-white transition-colors'} />
-              {isSidebarOpen && <span className="font-medium whitespace-nowrap overflow-hidden">{item.label}</span>}
-              {!isSidebarOpen && (
-                <div className="absolute left-14 bg-[#2a3441] text-white px-2 py-1 rounded-md text-sm opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700">
-                  {item.label}
-                </div>
-              )}
-            </button>
-          ))}
+            { id: 'Dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+            { id: 'Clientes', icon: Users, label: 'Clientes' },
+            { id: 'Pedidos', icon: ShoppingCart, label: 'Pedidos' },
+            { id: 'Orcamentos', icon: FileText, label: 'Orçamentos' },
+            { id: 'Financeiro', icon: DollarSign, label: 'Financeiro' },
+            { id: 'Configuracoes', icon: Settings, label: 'Configurações' },
+          ].map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex items-center gap-3 w-full px-3 py-3 rounded-xl transition-all duration-200 group relative ${isActive ? 'bg-blue-500/10 text-blue-400' : 'text-slate-400 hover:bg-[#2a3441] hover:text-white'}`}>
+                <item.icon size={20} className={isActive ? 'text-blue-400' : 'text-slate-400 group-hover:text-white transition-colors'} />
+                {isSidebarOpen && <span className="font-medium whitespace-nowrap overflow-hidden">{item.label}</span>}
+                {!isSidebarOpen && (
+                  <div className="absolute left-14 bg-[#2a3441] text-white px-2 py-1 rounded-md text-sm opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-xl border border-slate-700">
+                    {item.label}
+                  </div>
+                )}
+              </button>
+            )
+          })}
         </nav>
 
         <div className="p-4 border-t border-[#2a3441]">
@@ -296,292 +308,311 @@ function App() {
           </div>
         </header>
 
-        {/* Dashboard Scrollable Body */}
-        <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
-          <div className="max-w-[1600px] mx-auto space-y-6">
+        {/* Main Content Areas */}
+        {activeTab === 'Dashboard' && (
+          <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+            <div className="max-w-[1600px] mx-auto space-y-6">
 
-            {/* Top Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">FATURAMENTO</span>
-                  <div className="p-1 rounded bg-blue-500/10">
-                    <TrendingUp size={14} className="text-blue-500" />
+              {/* Top Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">FATURAMENTO</span>
+                    <div className="p-1 rounded bg-blue-500/10">
+                      <TrendingUp size={14} className="text-blue-500" />
+                    </div>
                   </div>
-                </div>
-                <div className="text-2xl font-bold text-white mb-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.faturamentoMes)}
-                </div>
-                <div className="text-[#64748b] text-[11px]">Pagamentos Processados</div>
-              </div>
-
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">A RECEBER</span>
-                  <div className="p-1 rounded bg-yellow-500/10">
-                    <DollarSign size={14} className="text-yellow-500" />
+                  <div className="text-2xl font-bold text-white mb-1">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.faturamentoMes)}
                   </div>
+                  <div className="text-[#64748b] text-[11px]">Pagamentos Processados</div>
                 </div>
-                <div className="text-2xl font-bold text-white mb-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.aReceber)}
-                </div>
-                <div className="text-[#64748b] text-[11px]">Em aberto</div>
-              </div>
 
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">CLIENTES ATIVOS</span>
-                  <div className="p-1 bg-emerald-500/10 rounded">
-                    <UserCheck size={14} className="text-emerald-500" />
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">A RECEBER</span>
+                    <div className="p-1 rounded bg-yellow-500/10">
+                      <DollarSign size={14} className="text-yellow-500" />
+                    </div>
                   </div>
-                </div>
-                <div className="text-2xl font-bold text-white mb-1">{metrics.clientesAtivos.toLocaleString('pt-BR')}</div>
-                <div className="text-[#64748b] text-[11px]">Clientes únicos recentes</div>
-              </div>
-
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">TOTAL DE PEDIDOS</span>
-                  <div className="p-1 bg-purple-500/10 rounded">
-                    <ShoppingCart size={14} className="text-purple-500" />
+                  <div className="text-2xl font-bold text-white mb-1">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.aReceber)}
                   </div>
+                  <div className="text-[#64748b] text-[11px]">Em aberto</div>
                 </div>
-                <div className="text-2xl font-bold text-white mb-1">{metrics.totalPedidos.toLocaleString('pt-BR')}</div>
-                <div className="text-[#64748b] text-[11px]">Volume no período</div>
-              </div>
 
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">ORÇAMENTOS</span>
-                  <div className="p-1 bg-cyan-500/10 rounded">
-                    <FileText size={14} className="text-cyan-500" />
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">CLIENTES ATIVOS</span>
+                    <div className="p-1 bg-emerald-500/10 rounded">
+                      <UserCheck size={14} className="text-emerald-500" />
+                    </div>
                   </div>
+                  <div className="text-2xl font-bold text-white mb-1">{metrics.clientesAtivos.toLocaleString('pt-BR')}</div>
+                  <div className="text-[#64748b] text-[11px]">Clientes únicos recentes</div>
                 </div>
-                <div className="text-2xl font-bold text-white mb-1">...</div>
-                <div className="text-[#64748b] text-[11px]">Dados pendentes</div>
-              </div>
-            </div>
 
-            {/* Faturamento Diário Area Chart */}
-            <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
-              <h2 className="text-base font-bold text-white mb-0">Faturamento Diário — Total</h2>
-              <p className="text-[#64748b] text-xs mb-6">Visualização da View (Total Processado)</p>
-              <div className="h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={faturamentoData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="date" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="valor" name="Faturamento" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorValor)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">TOTAL DE PEDIDOS</span>
+                    <div className="p-1 bg-purple-500/10 rounded">
+                      <ShoppingCart size={14} className="text-purple-500" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-bold text-white mb-1">{metrics.totalPedidos.toLocaleString('pt-BR')}</div>
+                  <div className="text-[#64748b] text-[11px]">Volume no período</div>
+                </div>
 
-            {/* Mid Row: Empresa Bar Chart, Empresa Pie Chart & Recebimentos Tipo */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-4 flex flex-col justify-center shadow-lg shadow-black/20">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[#94a3b8] text-[10px] font-bold tracking-wider">FATURAMENTO DIÁRIO</span>
+                    <div className="p-1 bg-cyan-500/10 rounded">
+                      <TrendingUp size={14} className="text-cyan-500" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-bold text-white mb-1">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.faturamentoDiario || 0)}
+                  </div>
+                  <div className="text-[#64748b] text-[11px]">Última data ({faturamentoData.length > 0 ? faturamentoData[faturamentoData.length - 1].date : 'N/A'})</div>
+                </div>
+              </div>
+
+              {/* Faturamento Diário Area Chart */}
               <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
-                <h2 className="text-base font-bold text-white mb-0">Faturamento Diário por Empresa</h2>
-                <p className="text-[#64748b] text-xs mb-6">Consolidado por Identificador</p>
-                <div className="h-[260px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={empresaData} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
-                      <XAxis dataKey="date" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
-                      <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `${value / 1000}k`} />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#2a3441', opacity: 0.4 }} />
-                      <Legend verticalAlign="bottom" height={36} iconType="square" iconSize={10} wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
-                      <Bar dataKey="ingresso" name="Gráfica Expressa (1)" stackId="a" fill="#3b82f6" />
-                      <Bar dataKey="biro" name="Birô Serv (2)" stackId="a" fill="#10b981" />
-                      <Bar dataKey="e3" name="E3/Outra (3)" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
-                <h2 className="text-base font-bold text-white mb-0">Total Mensal por Empresa</h2>
-                <p className="text-[#64748b] text-xs mb-6">Faturamento Acumulado (Mês)</p>
-                <div className="h-[260px] w-full relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={empresaPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={90}
-                        paddingAngle={3}
-                        dataKey="value"
-                        stroke="none"
-                        labelLine={false}
-                        label={renderOuterLabel}
-                      >
-                        {empresaPieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', color: '#94a3b8', bottom: -10 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
-                <h2 className="text-base font-bold text-white mb-0">Faturamento por Tipo de Recebimento</h2>
-                <p className="text-[#64748b] text-xs mb-6">Mês atual - (PIX, Boleto, Cartão)</p>
-                <div className="h-[260px] w-full relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={cobrancaData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={90}
-                        paddingAngle={3}
-                        dataKey="value"
-                        stroke="none"
-                        labelLine={false}
-                        label={renderOuterLabel}
-                      >
-                        {cobrancaData.map((_, index) => {
-                          const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
-                          return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                        })}
-                      </Pie>
-                      <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', color: '#94a3b8', bottom: -10 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            {/* Top 10 Clientes Chart */}
-            <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
-              <h2 className="text-base font-bold text-white mb-0">Top 10 Clientes</h2>
-              <p className="text-[#64748b] text-xs mb-6">Maior faturamento acumulado</p>
-              <div className="h-[350px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topClientes} layout="vertical" margin={{ top: 0, right: 30, left: 100, bottom: 0 }}>
-                    <XAxis type="number" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
-                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={180} />
-                    <Bar dataKey="value" name="Faturamento" radius={[0, 4, 4, 0]} barSize={16}>
-                      {topClientes.map((_, index) => {
-                        const colors = ['#3b82f6', '#10b981', '#a855f7', '#d946ef', '#f43f5e', '#06b6d4', '#6366f1', '#14b8a6', '#f59e0b', '#1e293b'];
-                        return <Cell key={`cell-${index}`} fill={colors[0]} />;
-                      })}
-                      <LabelList dataKey="value" position="right" fill="#94a3b8" fontSize={11} formatter={(val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(val))} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Bottom Row: Ranking, Recebimentos & Movimentações */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 lg:col-span-1">
-                <h2 className="text-base font-bold text-white mb-0">Ranking de Vendedores</h2>
-                <p className="text-[#64748b] text-xs mb-4">Métricas via pagamentos confirmados</p>
+                <h2 className="text-base font-bold text-white mb-0">Faturamento Diário — Total</h2>
+                <p className="text-[#64748b] text-xs mb-6">Visualização da View (Total Processado)</p>
                 <div className="h-[280px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={vendedoresData} layout="vertical" margin={{ top: 0, right: 20, left: 35, bottom: 0 }}>
+                    <AreaChart data={faturamentoData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="valor" name="Faturamento" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorValor)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Mid Row: Empresa Bar Chart, Empresa Pie Chart & Recebimentos Tipo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 flex flex-col">
+                  <div>
+                    <h2 className="text-base font-bold text-white mb-0">Faturamento Diário por Empresa</h2>
+                    <p className="text-[#64748b] text-xs mb-6">Consolidado por Identificador</p>
+                  </div>
+                  <div className="flex-1 min-h-[260px] w-full relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={empresaData} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+                        <XAxis dataKey="date" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `${value / 1000}k`} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#2a3441', opacity: 0.4 }} />
+                        <Legend verticalAlign="bottom" height={36} iconType="square" iconSize={10} wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
+                        <Bar dataKey="ingresso" name="Gráfica Expressa (1)" stackId="a" fill="#3b82f6" />
+                        <Bar dataKey="biro" name="Birô Serv (2)" stackId="a" fill="#10b981" />
+                        <Bar dataKey="e3" name="E3/Outra (3)" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 flex flex-col">
+                  <div>
+                    <h2 className="text-base font-bold text-white mb-0">Total Mensal por Empresa</h2>
+                    <p className="text-[#64748b] text-xs mb-6">Faturamento Acumulado (Mês)</p>
+                  </div>
+                  <div className="flex-1 min-h-[260px] w-full relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={empresaPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={90}
+                          paddingAngle={3}
+                          dataKey="value"
+                          stroke="none"
+                          labelLine={false}
+                          label={renderOuterLabel}
+                        >
+                          {empresaPieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', color: '#94a3b8', bottom: -10 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 flex flex-col">
+                  <div>
+                    <h2 className="text-base font-bold text-white mb-0">Faturamento por Tipo de Recebimento</h2>
+                    <p className="text-[#64748b] text-xs mb-6">Mês atual - (PIX, Boleto, Cartão)</p>
+                  </div>
+                  <div className="flex-1 min-h-[260px] w-full relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={cobrancaData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={90}
+                          paddingAngle={3}
+                          dataKey="value"
+                          stroke="none"
+                          labelLine={false}
+                          label={renderOuterLabel}
+                        >
+                          {cobrancaData.map((_, index) => {
+                            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                          })}
+                        </Pie>
+                        <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', color: '#94a3b8', bottom: -10 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top 10 Clientes Chart */}
+              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20">
+                <h2 className="text-base font-bold text-white mb-0">Top 10 Clientes</h2>
+                <p className="text-[#64748b] text-xs mb-6">Maior faturamento acumulado</p>
+                <div className="h-[350px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topClientes} layout="vertical" margin={{ top: 0, right: 30, left: 100, bottom: 0 }}>
                       <XAxis type="number" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
-                      <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={80} />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#2a3441', opacity: 0.4 }} />
-                      <Bar dataKey="value" name="Vendas" radius={[0, 4, 4, 0]} barSize={12}>
-                        {vendedoresData.map((_, index) => {
-                          const colors = ['#3b82f6', '#10b981', '#a855f7', '#d946ef', '#f43f5e', '#06b6d4', '#6366f1', '#14b8a6'];
-                          return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                      <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={180} />
+                      <Bar dataKey="value" name="Faturamento" radius={[0, 4, 4, 0]} barSize={16}>
+                        {topClientes.map((_, index) => {
+                          const colors = ['#3b82f6', '#10b981', '#a855f7', '#d946ef', '#f43f5e', '#06b6d4', '#6366f1', '#14b8a6', '#f59e0b', '#1e293b'];
+                          return <Cell key={`cell-${index}`} fill={colors[0]} />;
                         })}
+                        <LabelList dataKey="value" position="right" fill="#94a3b8" fontSize={11} formatter={(val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(val))} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 lg:col-span-1 flex flex-col">
-                <div>
-                  <h2 className="text-base font-bold text-white mb-0">Recebimentos</h2>
-                  <p className="text-[#64748b] text-xs mb-2">Status financeiro consolidado (v2)</p>
-                </div>
-
-                <div className="flex-1 min-h-[160px] pb-4 relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={recebimentosData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={70}
-                        paddingAngle={5}
-                        dataKey="value"
-                        stroke="none"
-                        labelLine={false}
-                        label={renderCustomizedLabel}
-                      >
-                        {recebimentosData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
-                      <Legend verticalAlign="bottom" height={36} iconType="square" iconSize={10} wrapperStyle={{ fontSize: '11px', color: '#94a3b8', bottom: -15 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mt-auto">
-                  <div className="bg-[#131826] rounded-lg p-2.5 border border-emerald-500/20 text-center">
-                    <p className="text-[#64748b] text-[10px] mb-0.5">Recebido</p>
-                    <p className="text-emerald-400 font-bold text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.faturamentoMes)}</p>
-                  </div>
-                  <div className="bg-[#131826] rounded-lg p-2.5 border border-yellow-500/20 text-center">
-                    <p className="text-[#64748b] text-[10px] mb-0.5">A Receber</p>
-                    <p className="text-yellow-500 font-bold text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.aReceber)}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 lg:col-span-1">
-                <div className="flex justify-between items-center mb-4">
+              {/* Bottom Row: Ranking, Recebimentos & Movimentações */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 lg:col-span-1 flex flex-col">
                   <div>
-                    <h2 className="text-base font-bold text-white mb-0">Últimas Movimentações</h2>
-                    <p className="text-[#64748b] text-xs">Atividade recente de cobranças</p>
+                    <h2 className="text-base font-bold text-white mb-0">Ranking de Vendedores</h2>
+                    <p className="text-[#64748b] text-xs mb-6">Métricas via pagamentos confirmados</p>
                   </div>
-                  <button className="text-blue-400 hover:text-blue-300 transition-colors">
-                    <ArrowRight size={16} />
-                  </button>
+                  <div className="flex-1 min-h-[260px] w-full relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={vendedoresData} layout="vertical" margin={{ top: 0, right: 20, left: 35, bottom: 0 }}>
+                        <XAxis type="number" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value / 1000}k`} />
+                        <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={80} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#2a3441', opacity: 0.4 }} />
+                        <Bar dataKey="value" name="Vendas" radius={[0, 4, 4, 0]} barSize={12}>
+                          {vendedoresData.map((_, index) => {
+                            const colors = ['#3b82f6', '#10b981', '#a855f7', '#d946ef', '#f43f5e', '#06b6d4', '#6366f1', '#14b8a6'];
+                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
 
-                <div className="space-y-3">
-                  {ultimasMovimentacoes.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-[#131826] border border-[#2a3441] hover:border-slate-700 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#1c2237] flex items-center justify-center shrink-0">
-                          <Activity size={14} className={item.action.includes('Pendente') ? 'text-yellow-400' : 'text-emerald-400'} />
-                        </div>
-                        <div className="overflow-hidden max-w-[130px]">
-                          <p className="text-sm text-slate-200 font-medium truncate">{item.action}</p>
-                          <p className="text-[10px] text-[#64748b] truncate">{item.num} • {item.user}</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-[#64748b] whitespace-nowrap ml-2">{item.time}</span>
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 lg:col-span-1 flex flex-col">
+                  <div>
+                    <h2 className="text-base font-bold text-white mb-0">Recebimentos</h2>
+                    <p className="text-[#64748b] text-xs mb-2">Status financeiro consolidado (v2)</p>
+                  </div>
+
+                  <div className="flex-1 min-h-[260px] mb-4 relative mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={recebimentosData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={90}
+                          paddingAngle={5}
+                          dataKey="value"
+                          stroke="none"
+                          labelLine={false}
+                          label={renderCustomizedLabel}
+                        >
+                          {recebimentosData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
+                        <Legend verticalAlign="bottom" height={36} iconType="square" iconSize={10} wrapperStyle={{ fontSize: '11px', color: '#94a3b8', bottom: -15 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-auto">
+                    <div className="bg-[#131826] rounded-lg p-2.5 border border-emerald-500/20 text-center">
+                      <p className="text-[#64748b] text-[10px] mb-0.5">Recebido</p>
+                      <p className="text-emerald-400 font-bold text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.faturamentoMes)}</p>
                     </div>
-                  ))}
+                    <div className="bg-[#131826] rounded-lg p-2.5 border border-yellow-500/20 text-center">
+                      <p className="text-[#64748b] text-[10px] mb-0.5">A Receber</p>
+                      <p className="text-yellow-500 font-bold text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.aReceber)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#1c2237] border border-[#2a3441] rounded-xl p-5 shadow-lg shadow-black/20 lg:col-span-1">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h2 className="text-base font-bold text-white mb-0">Últimas Movimentações</h2>
+                      <p className="text-[#64748b] text-xs">Atividade recente de cobranças</p>
+                    </div>
+                    <button className="text-blue-400 hover:text-blue-300 transition-colors">
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {ultimasMovimentacoes.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-[#131826] border border-[#2a3441] hover:border-slate-700 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[#1c2237] flex items-center justify-center shrink-0">
+                            <Activity size={14} className={item.action.includes('Pendente') ? 'text-yellow-400' : 'text-emerald-400'} />
+                          </div>
+                          <div className="overflow-hidden max-w-[130px]">
+                            <p className="text-sm text-slate-200 font-medium truncate">{item.action}</p>
+                            <p className="text-[10px] text-[#64748b] truncate">{item.num} • {item.user}</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-[#64748b] whitespace-nowrap ml-2">{item.time}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
 
+            </div>
           </div>
-        </div>
+        )}
+
+        {activeTab === 'Clientes' && (
+          <div className="flex-1 overflow-hidden">
+            <ClientesPage />
+          </div>
+        )}
+
       </main>
     </div>
   );
